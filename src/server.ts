@@ -15,12 +15,15 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
-// 1. Socket.io Configuration
+// 1. Socket.io Configuration (v4.8.3 compatible)
 const io = new Server(httpServer, {
-    cors: { origin: "*" }
+    cors: { 
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
 });
 
-// 2. Global State (Exported for Middlewares)
+// 2. Global State for Advertic Slot System
 export const activeUploads = new Set<string>();
 export const userFiles = new Map<string, string>();
 
@@ -28,14 +31,30 @@ export const userFiles = new Map<string, string>();
 app.use(cors());
 app.use(express.json());
 
-// 4. The Upload Route Logic
+// CSP Fix for Chrome DevTools
+app.use((req, res, next) => {
+    res.setHeader(
+        "Content-Security-Policy", 
+        "default-src 'self'; connect-src 'self' https://cloud.appwrite.io ws://localhost:5000 http://localhost:5000;"
+    );
+    next();
+});
+
+// 4. Routes
+
+// Health Check
+app.get("/", (req, res) => {
+    res.send("🚀 Advertic API (Appwrite v22) is operational.");
+});
+
+// Upload Route Logic
 app.post("/api/upload", upload.single("file"), async (req: any, res: any) => {
     const { socketId } = req.body;
 
-    // Rule: Queue check
+    // Slot Rule: Max 4 users
     if (activeUploads.size >= 4) {
         if (req.file) fs.unlinkSync(req.file.path);
-        return res.status(429).json({ error: "Server busy. Try again in a minute." });
+        return res.status(429).json({ error: "Queue is full. Only 4 concurrent uploads allowed." });
     }
 
     if (!req.file || !socketId) {
@@ -46,66 +65,60 @@ app.post("/api/upload", upload.single("file"), async (req: any, res: any) => {
     try {
         activeUploads.add(socketId);
 
-        // Upload to Appwrite Cloud
+        // Upload to Appwrite via v22 Service
         const file = await uploadToAppwrite(req.file.path, req.file.originalname);
         
-        // Register for 5-minute cleanup
+        // Track for 5-minute deletion
         userFiles.set(socketId, file.$id);
 
         const downloadUrl = `${process.env.APPWRITE_ENDPOINT}/storage/buckets/${process.env.APPWRITE_BUCKET_ID}/files/${file.$id}/view?project=${process.env.APPWRITE_PROJECT_ID}`;
 
         res.json({
+            success: true,
             url: downloadUrl,
-            fileId: file.$id,
-            message: "Success! Link expires 5 mins after you leave."
+            fileId: file.$id
         });
 
-    } catch (error) {
-        console.error("Upload Error:", error);
-        res.status(500).json({ error: "Cloud upload failed." });
+    } catch (error: any) {
+        console.error("v22 Upload Error:", error.message);
+        res.status(500).json({ error: error.message || "Appwrite Cloud Upload failed." });
     } finally {
         activeUploads.delete(socketId);
-        // Clean up server local disk
+        // Clean disk immediately after cloud transfer
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }
     }
 });
 
-// 5. Real-time Logic (Socket.io)
+// 5. Socket.io Event Handling
 io.on("connection", (socket) => {
-    console.log(`User connected: ${socket.id}`);
+    console.log(`✅ Socket connected: ${socket.id}`);
 
-    // Frontend slot check
-    socket.on("check_queue", () => {
-        socket.emit("queue_status", { allowed: activeUploads.size < 4 });
-    });
-
-    // 5-Minute Auto-Delete Rule
     socket.on("disconnect", () => {
         const fileId = userFiles.get(socket.id);
         if (fileId) {
-            console.log(`Scheduling deletion for ${fileId} in 5 minutes...`);
+            console.log(`⏱️ Deletion timer started (5 mins) for file: ${fileId}`);
             setTimeout(async () => {
                 try {
                     await deleteFromAppwrite(fileId);
                     userFiles.delete(socket.id);
-                    console.log(`Auto-deleted: ${fileId}`);
+                    console.log(`🗑️ Auto-deleted expired file: ${fileId}`);
                 } catch (err) {
-                    console.error("Auto-delete failed:", err);
+                    console.error("Auto-delete cleanup failed:", err);
                 }
             }, 5 * 60 * 1000);
         }
     });
 });
 
-// 6. Start Server
+// 6. Start Server with v22 Optimizations
 const PORT = process.env.PORT || 5000;
-httpServer.timeout = 0; // Required for 5GB uploads
+httpServer.timeout = 0; // Prevent 5GB upload timeout disconnects
 
 httpServer.listen(PORT, () => {
     console.log(`-----------------------------------------`);
-    console.log(`🚀 Advertic API: http://localhost:${PORT}`);
-    console.log(`🔗 Endpoint: ${process.env.APPWRITE_ENDPOINT}`);
+    console.log(`🚀 Advertic API v22: http://localhost:${PORT}`);
+    console.log(`📡 Appwrite: ${process.env.APPWRITE_ENDPOINT}`);
     console.log(`-----------------------------------------`);
 });

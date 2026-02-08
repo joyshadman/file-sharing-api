@@ -2,8 +2,14 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 
-// Ensure the temporary directory exists for 5GB chunks
+/**
+ * CommonJS Version
+ * In CommonJS, __dirname is globally available.
+ * We go up two levels from src/middlewares to reach the project root.
+ */
 const uploadDir = path.join(__dirname, "../../temp-uploads");
+
+// Ensure the temporary directory exists for 5GB chunks
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }

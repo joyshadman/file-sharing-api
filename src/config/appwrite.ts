@@ -3,17 +3,16 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const endpoint = process.env.APPWRITE_ENDPOINT?.trim() || "https://cloud.appwrite.io/v1";
-const projectId = process.env.APPWRITE_PROJECT_ID?.trim();
-const apiKey = process.env.APPWRITE_API_KEY?.trim();
+const client = new Client();
 
-if (!projectId || !apiKey) {
-    console.error("❌ CRITICAL: Appwrite Project ID or API Key is missing in .env");
-}
+// Force the endpoint and check for typos
+const endpoint = "https://cloud.appwrite.io/v1"; 
+const project = (process.env.APPWRITE_PROJECT_ID || "").trim();
+const key = (process.env.APPWRITE_API_KEY || "").trim();
 
-const client = new Client()
+client
     .setEndpoint(endpoint)
-    .setProject(projectId!)
-    .setKey(apiKey!);
+    .setProject(project)
+    .setKey(key);
 
 export const appwriteStorage = new Storage(client);

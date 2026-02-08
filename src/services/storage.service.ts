@@ -1,25 +1,29 @@
-import { Client, Storage, ID } from "node-appwrite";
-import { InputFile } from "node-appwrite/file"; // Direct import fix
+import { ID, InputFile } from "node-appwrite";
 import { appwriteStorage } from "../config/appwrite";
 
 /**
- * Uploads a file from the local disk to Appwrite Storage
+ * Version 9.x Compatible Service
+ * This version uses the standard createFile structure that older 
+ * Appwrite servers (returning error 1.8.1) expect.
  */
 export const uploadToAppwrite = async (filePath: string, fileName: string) => {
-    // InputFile.fromPath streams the file to avoid memory issues with 5GB files
+    const bucketId = (process.env.APPWRITE_BUCKET_ID || "").trim();
+
+    if (!bucketId) {
+        throw new Error("Missing APPWRITE_BUCKET_ID");
+    }
+
+    // In v9, InputFile.fromPath is part of the main export
     return await appwriteStorage.createFile(
-        process.env.APPWRITE_BUCKET_ID!,
+        bucketId,
         ID.unique(),
         InputFile.fromPath(filePath, fileName)
     );
 };
 
-/**
- * Deletes a file from Appwrite Storage
- */
 export const deleteFromAppwrite = async (fileId: string) => {
-    return await appwriteStorage.deleteFile(
-        process.env.APPWRITE_BUCKET_ID!,
-        fileId
-    );
+    const bucketId = (process.env.APPWRITE_BUCKET_ID || "").trim();
+    if (!bucketId || !fileId) return;
+
+    return await appwriteStorage.deleteFile(bucketId, fileId);
 };
