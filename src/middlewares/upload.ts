@@ -1,11 +1,7 @@
 import multer from "multer";
-import { v4 as uuidv4 } from "uuid";
 
-const storage = multer.diskStorage({
- destination:"src/uploads",
- filename:(_,file,cb)=>{
-  cb(null, uuidv4()+"-"+file.originalname);
- }
-});
+const storage = multer.diskStorage({});
 
-export default multer({storage});
+const upload = multer({ storage });
+
+export default upload;
